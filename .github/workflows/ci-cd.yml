@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,3 +28,22 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/rag-app:latest
+
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          password: ${{ secrets.VM_PASSWORD }}
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/rag-app:latest
+
+            docker stop rag-container || true
+            docker rm rag-container || true
+
+            docker run -d \
+              --env-file .env \
+              -p 8000:8000 \
+              -p 8501:8501 \
+              --name rag-container \
+              ${{ secrets.DOCKERHUB_USERNAME }}/rag-app:latest
