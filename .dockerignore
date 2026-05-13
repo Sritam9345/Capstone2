@@ -1,0 +1,7 @@
+myenv
+__pycache__
+chroma
+.git/
+.env
+*.pyc
+.DS_Store
