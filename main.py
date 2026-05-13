@@ -17,16 +17,38 @@ def home():
 
 
 
-@app.get('/signup')
-def checkUser(username: str):
+@app.post('/signup')
+def checkUser(data: dict):
     try:
-        checkUniqueUser(username=username)
-        print("user created successfully!")
+        response = checkUniqueUser(username=data['username'])
+
+        userData = {}
+        messagesToCorrespondingThread = {}
+
+        for results in response:
+            
+            if 'name' not in userData.keys():
+                userData['name'] = results['name']
+
+            if 'threadID' not in userData.keys():
+                userData['threadID'] = [results['threadID']]
+            else:
+                userData['threadID'].append(results['threadID'])
+
+            messagesToCorrespondingThread[results['threadID']] = results['message']
+
+        print({
+            'userData': userData,
+            'messages': messagesToCorrespondingThread
+        })
+        
+        return {
+            'userData': userData,
+            'messages': messagesToCorrespondingThread
+        }
+
     except Exception as e:
         raise(e)
-    
-
-
 @app.post('/answer')
 def userAnswer(data: userQueryModel):
 
