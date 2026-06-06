@@ -3,14 +3,14 @@ from langgraph.graph import START, StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage, AIMessage
-from queryRetrieve.main import context_retrieval
+# from queryRetrieve.main import context_retrieval
 from llm.main import model
 from pydantic import BaseModel,Field
 from enum import Enum
-from langgraph.checkpoint.memory import InMemorySaver
-from db.main import collection_chat
-
-memory = InMemorySaver()
+from db.main import collection_chat,redis
+import json
+import asyncio
+import aiohttp
 
 class askToImprove(str,Enum):
     yes = 'yes'
@@ -25,22 +25,21 @@ class ChatState(TypedDict):
     agent: str
     validatorRoute: str
     improve: askToImprove
+    summary: str
 
 
-def retriever(state: ChatState):
+async def retriever(state: ChatState):
 
-    userMessage = state["user"][-1].content
-
-    result = context_retrieval(userMessage)
-
-    for i in range(0, len(result['id'])):
-
-        if result['id'][i] not in state['context'].keys():
-
-            state['context'][result['id'][i]] = result['doc'][i]
-
+    query = state["user"][-1].content
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post('http://localhost:8051/retrieve',data=query) as response:
+            result = await response.json()
+            
+            for i in result:
+                state['context'][i] = result[i]
     return {
-        "context": state["context"]
+        "context":state['context']
     }
 
 class Role(str, Enum):
@@ -55,13 +54,11 @@ class validationSchema(BaseModel):
     score: float = Field(ge=0, le=1)
 
 
-def plannerAgent(state: ChatState):
+async def plannerAgent(state: ChatState):
 
     userMessage = state["user"][-1].content
 
-    response = model.beta.chat.completions.parse(
-        model="gpt-4.1-nano",
-        messages=[
+    messages=[
             {
                 "role": "system",
                 "content": """
@@ -79,9 +76,10 @@ Return the best agent for the task.
                 "role": "user",
                 "content": userMessage
             }
-        ],
-        response_format=PlannerSchema
-    )
+        ]
+    
+    
+    response = await llmInvoke(messages=messages,schema=PlannerSchema)
 
     result = response.choices[0].message.parsed
 
@@ -90,7 +88,7 @@ Return the best agent for the task.
     }
     
     
-def knowledgeBasedAgent(state: ChatState):
+async def knowledgeBasedAgent(state: ChatState):
 
     contextChunks = state.get("context", {})
 
@@ -125,7 +123,7 @@ def knowledgeBasedAgent(state: ChatState):
             "content": latestUserMessage.content
         })
     
-    print(conversationHistory)
+    
     
     messages = [
         {
@@ -145,14 +143,12 @@ Retrieved Context:
 
 AskedToImprove:
 {improve}
-"""
+""",
+            "summary":state['summary']
         }
     ]
 
-    response = model.chat.completions.create(
-        model="gpt-4.1-nano",
-        messages=messages,
-    )
+    response = await llmInvoke(messages=messages)
 
     aiContent = response.choices[0].message.content
 
@@ -174,7 +170,7 @@ AskedToImprove:
     }
     
     
-def technicalSupportAgent(state: ChatState):
+async def technicalSupportAgent(state: ChatState):
 
     contextChunks = state.get("context", {})
 
@@ -228,14 +224,12 @@ Retrieved Context:
 
 AskedToImprove:
 {improve}
-"""
+""",
+            "summary":state['summary']
         }
     ]
 
-    response = model.chat.completions.create(
-        model="gpt-4.1-nano",
-        messages=messages,
-    )
+    response = await llmInvoke(messages=messages)
 
     aiContent = response.choices[0].message.content
 
@@ -257,7 +251,7 @@ AskedToImprove:
     }
 
 
-def complianceAgent(state: ChatState):
+async def complianceAgent(state: ChatState):
 
     contextChunks = state.get("context", {})
 
@@ -311,14 +305,12 @@ Retrieved Context:
 
 AskedToImprove:
 {improve}
-"""
+""",
+            "summary":state['summary']
         }
     ]
 
-    response = model.chat.completions.create(
-        model="gpt-4.1-nano",
-        messages=messages,
-    )
+    response = await llmInvoke(messages=messages)
 
     aiContent = response.choices[0].message.content
 
@@ -340,7 +332,7 @@ AskedToImprove:
     }
 
 
-def validatorAgent(state: ChatState):
+async def validatorAgent(state: ChatState):
 
     currentIteration = state["current_iteration"]
     maxIterations = state["max_iterations"]
@@ -354,9 +346,7 @@ def validatorAgent(state: ChatState):
     latestAnswer = state["ai"][-1].content
     userMessage = state["user"][-1].content
 
-    response = model.beta.chat.completions.parse(
-        model="gpt-4.1-nano",
-        messages=[
+    messages=[
             {
                 "role": "system",
                 "content": """
@@ -379,11 +369,15 @@ User Query:
 
 Specialized Agent Answer:
 {latestAnswer}
-"""
+""",
+            "summary":state['summary']
             }
-        ],
-        response_format=validationSchema
-    )
+        ]
+    
+        
+    
+    
+    response = await llmInvoke(messages=messages,schema=validationSchema)
 
     result = response.choices[0].message.parsed
 
@@ -401,14 +395,12 @@ Specialized Agent Answer:
     
     
     
-def beautifyAgent(state: ChatState):
+async def beautifyAgent(state: ChatState):
 
     latestAnswer = state["ai"][-1].content
     userMessage = state["user"][-1].content
 
-    response = model.chat.completions.create(
-        model="gpt-4.1-nano",
-        messages=[
+    messages=[
             {
                 "role": "system",
                 "content": (
@@ -427,10 +419,13 @@ User Query:
 Current Answer:
 {latestAnswer}
 """,
+            "summary":state['summary']
             },
-        ],
-    )
-
+        ]
+    
+    
+    response = await llmInvoke(messages=messages)
+    
     beautifiedContent = response.choices[0].message.content
 
     latestAiMessage = state["ai"][-1]
@@ -491,63 +486,65 @@ graph.add_edge("beautifyAgent", END)
 
 finalGraph = graph.compile()
 
-
-from uuid import uuid4
-
-
-threadId = str(uuid4())
-
-config = {
-    "configurable": {
-        "thread_id": threadId
-    }
-}
-
-
-
-
-
-
-def userConversation(userInput, username, threadID):
-
-    chatDoc = collection_chat.find_one({
-        "name": username,
-        "threadID": threadID
-    })
-
-    userMessages = []
-    aiMessages = []
-
+async def userConversation(username,userInput,threadID):
     
+    flattenedUserKey = f"{username}:{threadID}"
     
-    if chatDoc and "message" in chatDoc:
+    cachedResult = await redis.get(flattenedUserKey)
+     
+    result = {}
+     
+    if not cachedResult:
+        print('cache miss')
+        userChat = await collection_chat.find_one({
+            'name':username,
+            'threadID':threadID
+        })
 
-        for message in chatDoc["message"]:
-
-            role = message.get("role")
-            content = message.get("content", "")
-
-            if role == "user":
-                userMessages.append(
-                    HumanMessage(content=content)
+        
+        if not userChat:
+            result = await cacheMissAndUserNotPresent(
+                userInput=userInput
                 )
-
-            elif role == "ai":
-                aiMessages.append(
-                    AIMessage(content=content)
-                )
-
-    userMessages.append(
-        HumanMessage(content=userInput)
-    )
-
+        else:
+            result = await cacheMissButUserPresent(
+                userInput=userInput,
+                userData=userChat
+            )
     
+    else:
+        print('cache hit')
+        cache = json.loads(cachedResult)
+        result = await cacheHit(
+            cache=cache,
+            userInput=userInput
+        )
+
+    dataOnRedis = {}
     
+    if cachedResult:
+        dataOnRedis = json.loads(cachedResult)
+        dataOnRedis['message'].extend([{'role':'user','content':userInput},{'role':'ai','content':result['answer']}])
+    else:
+        dataOnRedis['message']=[]
+        dataOnRedis['message'].extend([{'role':'user','content':userInput},{'role':'ai','content':result['answer']}])
+        dataOnRedis['summary'] = result['summary']
     
-    result = finalGraph.invoke(
+    await redis.set(flattenedUserKey,json.dumps(dataOnRedis))
+    
+    return result['answer']
+  
+async def cacheMissAndUserNotPresent(username,threadID,userInput):
+    
+    userMessage=[]
+    aiMessage = []
+    
+    userMessage.append(HumanMessage(content=userInput))
+    
+    result = await finalGraph.ainvoke(
         {
-            "user": userMessages,
-            "ai": aiMessages,
+            "user": userMessage,
+            "ai": aiMessage,
 
             "max_iterations": 3,
 
@@ -559,54 +556,140 @@ def userConversation(userInput, username, threadID):
 
             "validatorRoute": "",
 
-            "improve": "no"
+            "improve": "no",
+            
+            "summary": ""
         }
     )
+    
+    answer = result['ai'][-1].content
+    summary = ""
+    
+    
+    
+    return {
+        "answer":answer,
+        "summary": summary
+    }
 
-    aiMessage = result["ai"][-1].content
+async def cacheMissButUserPresent(userInput,userData):
+    
+    userMessage = []
+    aiMessage = []
+    
+    messages = [
+    {
+        "role": "system",
+        "content": "Generate a concise summary of the conversation along with personal details in 250 words."
+    }
+]
 
-    updatedMessages = []
+    for item in userData["message"]:
+        if item["role"] == 'ai':
+            messages.append({
+                "role": 'assistant',
+                "content": item["content"]
+            })
+        else:
+            messages.append({
+                "role": 'user',
+                "content": item["content"]
+            })
+        
+        if item["role"] == 'user':
+            userMessage.append(HumanMessage(content=item['content']))
+        else:
+            aiMessage.append(AIMessage(content=item['content']))
+    
+    
+    userMessage.append(HumanMessage(content=userInput))
+    
+    result = await llmInvoke(messages=messages)
 
-    totalHistory = min(
-        len(userMessages),
-        len(aiMessages)
-    )
-
-    for i in range(totalHistory):
-
-        updatedMessages.append({
-            "role": "user",
-            "content": userMessages[i].content
-        })
-
-        updatedMessages.append({
-            "role": "ai",
-            "content": aiMessages[i].content
-        })
-
-    updatedMessages.append({
-        "role": "user",
-        "content": userInput
-    })
-
-    updatedMessages.append({
-        "role": "ai",
-        "content": aiMessage
-    })
-
-    collection_chat.update_one(
+    summary = result.choices[0].message.content
+    
+    result = await finalGraph.ainvoke(
         {
-            "name": username,
-            "threadID": threadID
-        },
-        {
-            "$set": {
-                "name": username,
-                "threadID": threadID,
-                "message": updatedMessages
-            }
-        },
-        upsert=True
-    )
+            "user": userMessage,
+            "ai": aiMessage,
 
-    return aiMessage
+            "max_iterations": 3,
+
+            "current_iteration": 0,
+
+            "context": {},
+
+            "agent": "",
+
+            "validatorRoute": "",
+
+            "improve": "no",
+            
+            "summary": summary
+        }
+    )
+    
+    answer = result['ai'][-1].content
+    
+    
+    return {
+        'answer':answer,
+        'summary':summary
+    }
+    
+async def cacheHit(userInput,cache):
+    userMessage = []
+    aiMessage = []
+    
+    for item in cache['message']:
+        if item['role'] =='user':
+            userMessage.append(HumanMessage(content=item['content']))
+        else:
+            aiMessage.append(AIMessage(content=item['content']))
+    
+    summary = cache['summary']
+    
+    userMessage.append(HumanMessage(content=userInput))
+    
+    result = await finalGraph.ainvoke(
+        {
+            "user": userMessage,
+            "ai": aiMessage,
+
+            "max_iterations": 3,
+
+            "current_iteration": 0,
+
+            "context": {},
+
+            "agent": "",
+
+            "validatorRoute": "",
+
+            "improve": "no",
+            
+            "summary": summary
+        }
+    )
+    
+    answer = result['ai'][-1].content
+    
+    return {
+        'answer':answer,
+        'summary':summary
+    }
+    
+async def llmInvoke(messages,schema=None):
+    
+    if schema:
+        response = await model.beta.chat.completions.parse(
+            model="gpt-4.1-nano",
+            messages=messages,
+            response_format=schema
+        )
+    else:
+        response = await model.chat.completions.create(
+            model="gpt-4.1-nano",
+            messages=messages
+        )
+    return response

@@ -4,11 +4,14 @@ from fastapi import FastAPI, Response, status
 from fastapi.responses import JSONResponse
 
 
-def checkUniqueUser(username):
-    exists = collection_chat.find({"name": username})
+async def checkUniqueUser(username):
+    exists = await collection_chat.find({"name": username})
     
     return exists
 
-def answerUserQuery(userInput,username,threadID):
-    result = userConversation(userInput=userInput , username=username,threadID=threadID)
+async def answerUserQuery(userInput,username,threadID):
+    result = await userConversation(userInput=userInput , username=username,threadID=threadID)
     return result
+
+# def ingest():
+    

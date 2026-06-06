@@ -1,7 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,UploadFile,File,Form
 from service.main import checkUniqueUser,answerUserQuery
 from pydantic import BaseModel
 import json
+from blob_upload.main import uploadFile
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -18,9 +20,9 @@ def home():
 
 
 @app.post('/signup')
-def checkUser(data: dict):
+async def checkUser(data: dict):
     try:
-        response = checkUniqueUser(username=data['username'])
+        response = await checkUniqueUser(username=data['username'])
 
         userData = {}
         messagesToCorrespondingThread = {}
@@ -49,9 +51,19 @@ def checkUser(data: dict):
 
     except Exception as e:
         raise(e)
-@app.post('/answer')
-def userAnswer(data: userQueryModel):
 
-    result = answerUserQuery(userInput=data.userQuery , username=data.username,threadID=data.threadID)
+@app.post('/answer')
+async def userAnswer(data: userQueryModel):
+
+    result = await answerUserQuery(userInput=data.userQuery , username=data.username,threadID=data.threadID)
     
-    return{"ai message":result}
+    return {"ai message":result}
+
+
+@app.post('/upload-file')
+async def handleFile(file: UploadFile = File(...)):
+    try:
+        response = await uploadFile(file.file,file.filename)
+        return {'message': response}
+    except Exception as e:
+        return str(e)    

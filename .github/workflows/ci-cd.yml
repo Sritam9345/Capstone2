@@ -27,7 +27,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/rag-app:latest
+          tags: sritamnanda57/rag-app:latest
 
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.0.3
@@ -36,14 +36,21 @@ jobs:
           username: ${{ secrets.VM_USERNAME }}
           password: ${{ secrets.VM_PASSWORD }}
           script: |
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/rag-app:latest
 
-            docker stop rag-container || true
-            docker rm rag-container || true
+            cd agentic-folder
 
-            docker run -d \
-              --env-file .env \
-              -p 8000:8000 \
-              -p 8501:8501 \
-              --name rag-container \
-              ${{ secrets.DOCKERHUB_USERNAME }}/rag-app:latest
+            docker stop redis || true
+
+            docker rmi redis || true
+
+            docker pull redis:8.8.0
+
+            docker pull sritamnanda57/rag-app:latest
+
+            docker rmi sritamnanda57/rag-app:latest || true
+
+            docker compose up
+
+            cd ..
+
+            docker run -d  --name redis-server -p 6379:6379 redis || true
