@@ -45,9 +45,9 @@ jobs:
 
               docker rmi sritamnanda57/rag-app:latest || true
 
-              docker compose pull
+              docker-compose pull
 
-              docker compose up -d
+              docker-compose up -d
 
               docker run -d \
                 --name redis-server \
