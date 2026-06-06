@@ -40,15 +40,15 @@ jobs:
 
             cd agentic-folder
 
-            docker stop redis || true
+            docker stop redis-server || true
 
-            docker rmi redis || true
+            docker rmi redis-server || true
 
             docker pull redis:8.8.0
 
-            docker pull sritamnanda57/rag-app:latest
-
             docker rmi sritamnanda57/rag-app:latest || true
+
+            docker pull sritamnanda57/rag-app:latest
 
             docker compose up
 
