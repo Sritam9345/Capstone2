@@ -37,21 +37,19 @@ jobs:
           username: ${{ secrets.VM_USERNAME }}
           password: ${{ secrets.VM_PASSWORD }}
           script: |
+              cd agentic-folder
 
-            cd agentic-folder
+              docker rm -f redis-server || true
 
-            docker stop redis-server || true
+              docker pull redis:8.8.0
 
-            docker rmi redis-server || true
+              docker rmi sritamnanda57/rag-app:latest || true
 
-            docker pull redis:8.8.0
+              docker compose pull
 
-            docker rmi sritamnanda57/rag-app:latest || true
+              docker compose up -d
 
-            docker pull sritamnanda57/rag-app:latest
-
-            docker compose up
-
-            cd ..
-
-            docker run -d  --name redis-server -p 6379:6379 redis || true
+              docker run -d \
+                --name redis-server \
+                -p 6379:6379 \
+                redis:8.8.0 || true
