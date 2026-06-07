@@ -534,6 +534,24 @@ async def userConversation(username,userInput,threadID):
         dataOnRedis['message'].extend([{'role':'user','content':userInput},{'role':'ai','content':result['answer']}])
         dataOnRedis['summary'] = result['summary']
     
+    
+    updatedMessage = [{'role':'user','content':userInput},{'role':'ai','content':result['answer']}]
+    
+    await collection_chat.update_one(
+    {
+        "name": username,
+        "threadID": threadID
+    },
+    {
+        "$push": {
+            "message": {
+                "$each": updatedMessage
+            }
+        }
+    },
+    upsert=True
+)
+    
     await redis.set(flattenedUserKey,json.dumps(dataOnRedis))
     
     return result['answer']
