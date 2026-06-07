@@ -49,10 +49,10 @@ jobs:
 
               docker-compose up -d
 
-              docker stop redis-server
+              docker stop redis-server || true
 
               docker rm -f redis-server || true
 
               docker rmi redis:latest || true
 
-              docker pull redis:8.8.0
+              docker pull redis:8.8.0 || true
