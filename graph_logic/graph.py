@@ -32,9 +32,13 @@ async def retriever(state: ChatState):
 
     query = state["user"][-1].content
     
+    payload = {'userQuery':query}
+    
     async with aiohttp.ClientSession() as session:
-        async with session.post('http://api:8051/retrieve',data=query) as response:
+        async with session.post('http://api:8051/retrieve',json=payload) as response:
             result = await response.json()
+            
+            print(result)
             
             for i in result:
                 state['context'][i] = result[i]
