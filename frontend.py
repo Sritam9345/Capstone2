@@ -2,7 +2,7 @@ import requests
 import streamlit as st
 from uuid import uuid4
 
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "http://agentic-api:8000"
 
 
 if "loginState" not in st.session_state:

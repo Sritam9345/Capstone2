@@ -14,7 +14,7 @@ db = client.RAGcumChat
 collection_chat = db["chat"]
 
 redis = redis.Redis(
-    host="localhost",
+    host="redis-server",
     port=6379,
     decode_responses=True
 )

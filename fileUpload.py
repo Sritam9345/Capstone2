@@ -4,7 +4,7 @@ import json
 
 st.title("File Upload Example")
 
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "http://agentic-api:8000"
 
 # Upload file
 uploaded_file = st.file_uploader(

@@ -37,19 +37,22 @@ jobs:
           username: ${{ secrets.VM_USERNAME }}
           password: ${{ secrets.VM_PASSWORD }}
           script: |
+              docker network create shared-network || true
+
               cd agentic-folder
 
-              docker rm -f redis-server || true
+              docker-compose down
 
-              docker pull redis:8.8.0
-
-              docker rmi sritamnanda57/rag-app:latest || true
+              docker rmi -f sritamnanda57/rag-app:latest || true
 
               docker-compose pull
 
               docker-compose up -d
 
-              docker run -d \
-                --name redis-server \
-                -p 6379:6379 \
-                redis:8.8.0 || true
+              docker stop redis-server
+
+              docker rm -f redis-server || true
+
+              docker rmi redis:latest || true
+
+              docker pull redis:8.8.0

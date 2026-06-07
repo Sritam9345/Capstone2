@@ -33,7 +33,7 @@ async def retriever(state: ChatState):
     query = state["user"][-1].content
     
     async with aiohttp.ClientSession() as session:
-        async with session.post('http://localhost:8051/retrieve',data=query) as response:
+        async with session.post('http://api:8051/retrieve',data=query) as response:
             result = await response.json()
             
             for i in result:
@@ -504,7 +504,7 @@ async def userConversation(username,userInput,threadID):
         
         if not userChat:
             result = await cacheMissAndUserNotPresent(
-                userInput=userInput
+                userInput=userInput,  
                 )
         else:
             result = await cacheMissButUserPresent(
@@ -534,7 +534,7 @@ async def userConversation(username,userInput,threadID):
     
     return result['answer']
   
-async def cacheMissAndUserNotPresent(username,threadID,userInput):
+async def cacheMissAndUserNotPresent(userInput):
     
     userMessage=[]
     aiMessage = []

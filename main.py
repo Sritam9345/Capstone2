@@ -26,6 +26,8 @@ async def checkUser(data: dict):
 
         userData = {}
         messagesToCorrespondingThread = {}
+        
+        print(response)
 
         for results in response:
             

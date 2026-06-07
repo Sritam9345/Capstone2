@@ -5,9 +5,9 @@ from fastapi.responses import JSONResponse
 
 
 async def checkUniqueUser(username):
-    exists = await collection_chat.find({"name": username})
+    response = await collection_chat.find({"name": username}).to_list(length=None)
     
-    return exists
+    return response
 
 async def answerUserQuery(userInput,username,threadID):
     result = await userConversation(userInput=userInput , username=username,threadID=threadID)
