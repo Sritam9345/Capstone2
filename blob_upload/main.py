@@ -21,7 +21,7 @@ queue_client = QueueClient.from_connection_string(
     conn_str=conne_str,
     queue_name=queue_name
 )
-semaphore = asyncio.Semaphore(5)
+semaphore = asyncio.Semaphore(100)
 
 async def uploadFile(file,filename):
     async with semaphore:
